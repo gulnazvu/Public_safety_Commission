@@ -1,6 +1,10 @@
 package com.example.publicsafetycommission;
 
 
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -11,13 +15,17 @@ import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.MediaStore;
+import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -28,8 +36,15 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.apache.commons.io.IOUtils;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
 public class ComplaintRegistrationNew extends AppCompatActivity implements AdapterView.OnItemSelectedListener {
     ImageView selectImage, selectVideo, selectAudio, selectDoc;
@@ -42,6 +57,11 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
     String path;
     File file1;
     public static final int SELECT_PICTURE = 1;
+
+    private ActivityResultLauncher<Intent> pickImageLauncher;
+    private File file;
+    private static final String PREFIX = "stream2file";
+    private static final String SUFFIX = ".jpg";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -106,8 +126,8 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
 
                 try {
                     addComplaintt(myspinner.getSelectedItemPosition(),
-                    myspinnertwo.getSelectedItemPosition(),
-                    detail.getText().toString().trim(),
+                            myspinnertwo.getSelectedItemPosition(),
+                            detail.getText().toString().trim(),
                             userid);
                 } catch (FileNotFoundException e) {
                     e.printStackTrace();
@@ -118,9 +138,13 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
         selectImage.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                pickImage();
+                Intent intent = new   Intent(Intent.ACTION_PICK,android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+
+                pickImageLauncher.launch(intent);
             }
         });
+
+        picImageLauncher();
     }
 
     private void pickImage() {
@@ -148,6 +172,7 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
             path = RealPathUtil.getRealPath(context,uri);
             Bitmap bitmap = BitmapFactory.decodeFile(path);
             imageview.setImageURI(uri);
+            Log.d("Complaint form ", ": "+path);
         }
     }
     public void addComplaintt(int userDistrict, int Category, String details, int userid) throws FileNotFoundException {
@@ -155,11 +180,12 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
         Retrofit retrofit = new Retrofit.Builder().baseUrl("https://ppsc.kp.gov.pk/Api_intern/")
                 .addConverterFactory(GsonConverterFactory.create()).build();
 
-        File file = new File(path);
+//        File file = new File(path);
+        addImagetoFile();
 
-         RequestBody requestFile = RequestBody.create(MediaType.parse("multipart/form-data"),file);
+        RequestBody requestFile = RequestBody.create(MediaType.parse("multipart/form-data"),file);
 
-       MultipartBody.Part body = MultipartBody.Part.createFormData("Attachment",file.getName(),requestFile);
+        MultipartBody.Part body = MultipartBody.Part.createFormData("Attachment",file.getName(),requestFile);
 
         RequestBody com_district = RequestBody.create(MediaType.parse("multipart/form-data"), String.valueOf(userDistrict));
         RequestBody com_category = RequestBody.create(MediaType.parse("multipart/form-data"), String.valueOf(Category));
@@ -172,7 +198,7 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
 
         Call<pojo> call= apisetObject.addComplaint(body,com_district, com_category,com_detail,com_id);
 
-       call.enqueue(new Callback<pojo>() {
+        call.enqueue(new Callback<pojo>() {
             @Override
             public void onResponse(Call<pojo> call, Response<pojo> response) {
                 pojo object=response.body();
@@ -181,15 +207,76 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
 
                 }else{
                     Toast.makeText(getApplicationContext(), object.getResponseMsg(), Toast.LENGTH_LONG).show();
-               }
+                }
 
-           }
+            }
 
             @Override
-           public void onFailure(Call<pojo> call, Throwable t) {
+            public void onFailure(Call<pojo> call, Throwable t) {
                 Toast.makeText(getApplicationContext(), "Something went wrong", Toast.LENGTH_LONG).show();
             }
         });
 
     }
+
+    public void picImageLauncher(){
+        pickImageLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                new ActivityResultCallback<ActivityResult>() {
+                    @Override
+                    public void onActivityResult(ActivityResult result) {
+                        if (result.getResultCode() == Activity.RESULT_OK && result.getData()!=null) {
+                            // There are no request codes
+
+
+
+                            Intent data=result.getData();
+
+                            try {
+                                Bitmap user_image_bm= MediaStore.Images.Media.getBitmap(
+                                        getContentResolver(),data.getData());
+                                imageview.setImageBitmap(user_image_bm);
+                            } catch (IOException e) {
+                                e.printStackTrace();
+
+
+                            }
+
+                        }
+                    }
+                });
+    }
+
+
+    public File addImagetoFile(){
+
+        imageview.invalidate();
+        BitmapDrawable drawable = (BitmapDrawable) imageview.getDrawable();
+        Bitmap bitmap = drawable.getBitmap();
+        try {
+            file = stream2file(getBitmapAsFile(bitmap));
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+        return file;
+    }
+
+
+
+    private File stream2file(InputStream in) throws IOException {
+        File tempFile = File.createTempFile(PREFIX, SUFFIX);
+        tempFile.deleteOnExit();
+        FileOutputStream out = new FileOutputStream(tempFile);
+        IOUtils.copy(in, out);
+        return tempFile;
+    }
+
+    private InputStream getBitmapAsFile(Bitmap bm) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        bm.compress(Bitmap.CompressFormat.JPEG, 90, baos);
+        return new ByteArrayInputStream(baos.toByteArray());
+    }
+
+
+
+}
