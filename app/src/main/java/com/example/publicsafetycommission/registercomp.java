@@ -1,17 +1,9 @@
 package com.example.publicsafetycommission;
 
-
-
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.toolbox.JsonObjectRequest;
-import com.android.volley.toolbox.Volley;
-
-
+import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -19,8 +11,8 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Base64;
-import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -30,39 +22,40 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.android.volley.NetworkResponse;
+import com.android.volley.AuthFailureError;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
-import com.android.volley.VolleyLog;
-import com.android.volley.toolbox.HttpHeaderParser;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.security.Permission;
+import java.util.HashMap;
+import java.util.Map;
 
-public class ComplaintRegistrationNew extends AppCompatActivity implements AdapterView.OnItemSelectedListener {
+
+public class registercomp extends AppCompatActivity implements AdapterView.OnItemSelectedListener {
     ImageView selectImage, selectVideo, selectAudio, selectDoc;
     ImageView back, imageview, videoview, audioview, docview;
     EditText detail;
     Button add;
-    TextView errorText;
     TextView logout;
     Spinner myspinner,myspinnertwo;
-    String district, category, detaill,id;
-    public static final int SELECT_PICTURE = 1;
-    String imageString;
     private int PICK_IMAGE_REQUEST = 1;
-
+    int userid;
+    Bitmap bitmap;
+    String encodedImage, imageString;
+    private static final String apiurl="https://ppsc.kp.gov.pk/Api_intern/complaint_register";
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState)
+    {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_complaint_registration_new);
+        setContentView(R.layout.activity_registercomp);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
 
         selectImage = findViewById(R.id.selectimage);
         selectVideo = findViewById(R.id.selectvideo);
@@ -79,7 +72,6 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
         audioview = findViewById(R.id.audioview);
         docview = findViewById(R.id.docview);
 
-
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this,
                 R.array.districts, android.R.layout.simple_spinner_item);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -93,13 +85,13 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
         myspinnertwo.setOnItemSelectedListener(this);
 
         SharedPreferences spref = getSharedPreferences("YOUR_PREF_NAME", 0);
-        int userid = spref.getInt("user_id", 0);
+        userid = spref.getInt("user_id", 0);
 
 
         back.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent intent = new Intent(ComplaintRegistrationNew.this,
+                Intent intent = new Intent(registercomp.this,
                         HomeActivity.class);
                 startActivity(intent);
             }
@@ -109,8 +101,7 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
             public void onClick(View v) {
                 SharedPreferences.Editor editor = spref.edit();
                 editor.clear();
-                Intent intent = new Intent(ComplaintRegistrationNew.this,
-                        LoginActivity.class);
+                Intent intent = new Intent(registercomp.this,LoginActivity.class);
                 startActivity(intent);
 
             }
@@ -118,75 +109,17 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
         selectImage.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-
+             ShowFileChooser();
             }
         });
 
         add.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-
-                        district= String.valueOf(myspinner.getSelectedItemPosition());
-                        category = String.valueOf(myspinnertwo.getSelectedItemPosition());
-                        detaill=detail.getText().toString().trim();
-                        id = String.valueOf(userid);
-
-                try {
-                    RequestQueue requestQueue = Volley.newRequestQueue(ComplaintRegistrationNew.this);
-                    String URL = "https://ppsc.kp.gov.pk/Api_intern/complaint_register";
-                    JSONObject jsonBody = new JSONObject();
-                    jsonBody.put("district_id_fk", district);
-                    jsonBody.put("complaint_category_id_fk", category);
-                    jsonBody.put("complaint_detail", detaill);
-                    jsonBody.put("user_id", id);
-
-                    jsonBody.put("Image", imageString);
-                    final String requestBody = jsonBody.toString();
-
-                    StringRequest stringRequest = new StringRequest(Request.Method.POST, URL, new Response.Listener<String>() {
-                        @Override
-                        public void onResponse(String response) {
-                            Log.i("VOLLEY", response);
-                            Toast.makeText(ComplaintRegistrationNew.this, "Volley response:" +response, Toast.LENGTH_SHORT).show();
-
-                        }
-                    }, error -> Log.e("VOLLEY", error.toString())) {
-                        @Override
-                        public String getBodyContentType() {
-                            return "application/json; charset=utf-8";
-                        }
-
-                        @Override
-                        public byte[] getBody() {
-                            try {
-                                return requestBody == null ? null : requestBody.getBytes("utf-8");
-                            } catch (UnsupportedEncodingException uee) {
-                                VolleyLog.wtf("Unsupported Encoding while trying to get the bytes of %s using %s", requestBody, "utf-8");
-                                return null;
-                            }
-                        }
-
-                        @Override
-                        protected com.android.volley.Response<String> parseNetworkResponse(NetworkResponse response) {
-                            String responseString = "";
-                            if (response != null) {
-                                responseString = String.valueOf(response.statusCode);
-                            }
-                            return Response.success(responseString, HttpHeaderParser.parseCacheHeaders(response));
-                        }
-                    };
-
-                    requestQueue.add(stringRequest);
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-
-
+                uploadtoserver();
             }
         });
-
     }
-
     @Override
     public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
 
@@ -196,7 +129,8 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
     public void onNothingSelected(AdapterView<?> parent) {
 
     }
-    private void showFileChooser() {
+
+    private void ShowFileChooser() {
         Intent pickImageIntent = new Intent(Intent.ACTION_PICK,
                 android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
         pickImageIntent.setType("image/*");
@@ -209,8 +143,7 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == PICK_IMAGE_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
             Uri filePath = data.getData();
             try {
@@ -227,16 +160,54 @@ public class ComplaintRegistrationNew extends AppCompatActivity implements Adapt
             }
         }
     }
-
     public String getStringImage(Bitmap bmp) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         bmp.compress(Bitmap.CompressFormat.JPEG, 100, baos);
         byte[] imageBytes = baos.toByteArray();
-        String encodedImage = Base64.encodeToString(imageBytes, Base64.DEFAULT);
+        encodedImage = Base64.encodeToString(imageBytes, Base64.DEFAULT);
         return encodedImage;
+
 
     }
 
+    private void uploadtoserver()
+    {
+        final String district= String.valueOf(myspinner.getSelectedItemPosition());
+        final String category = String.valueOf(myspinnertwo.getSelectedItemPosition());
+        final String detaill = detail.getText().toString().trim();
+        final String id = String.valueOf(userid);
+
+        StringRequest request=new StringRequest(Request.Method.POST, apiurl, new Response.Listener<String>() {
+            @Override
+            public void onResponse(String response)
+            {
+                Toast.makeText(getApplicationContext(),"FileUploaded Successfully",Toast.LENGTH_SHORT).show();
+            }
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                Toast.makeText(getApplicationContext(),error.toString(),Toast.LENGTH_SHORT).show();
+            }
+        })
+        {
+            @Override
+            protected Map<String, String> getParams() throws AuthFailureError
+            {
+                Map<String,String> map=new HashMap<String, String>();
+                map.put("district_id_fk", district);
+                map.put("complaint_category_id_fk", category);
+                map.put("complaint_detail", detaill);
+                map.put("user_id", id);
+                map.put("upload",imageString);
+                return map;
+            }
+        };
+
+        RequestQueue queue= Volley.newRequestQueue(getApplicationContext());
+        queue.add(request);
+
+
+    }  // end of function uploadto DB
 
 
 }

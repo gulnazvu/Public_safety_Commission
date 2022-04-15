@@ -30,7 +30,7 @@ public class HomeActivity extends AppCompatActivity {
         registerComplaint.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent myIntent = new Intent(HomeActivity.this, ComplaintRegistrationNew.class);
+                Intent myIntent = new Intent(HomeActivity.this, registercomp.class);
                 startActivity(myIntent);
             }
         });
